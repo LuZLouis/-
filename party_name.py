@@ -134,11 +134,11 @@ def distinguish(s):
                     t2[j][2].append(t2[i][2])
                     t2.pop(i)
                     z = z - 1
-                    j = j + 1
-                else:
+                    break
+                elif j == z - 1:
                     t2[i][0] = total[0]
                     t2[i][1] = total[1]
-                    j = j + 1
+                j = j + 1
         i = i + 1
     return_money = []
     for i in range(0, len(t2)):
