@@ -159,7 +159,7 @@ def distinguish(s):
     sum[2] = total[2]
     i = 0
     if len(t3) == 0:
-        return store
+        return (store),total_money, return_money
     while i < len(t3):
         if len(t3[i][2]) >= 4:
             t3.insert(i, t3[i])
