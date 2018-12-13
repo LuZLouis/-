@@ -46,7 +46,7 @@ def distinguish(s):
                             t3.append([float(a), li[i + 1], [number]])
                         else:
                             continue
-                if sign1 > 0:
+                if sign1 > -6:
                     if len(t2) == 0:
                         t2.append([float(a), li[i + 1], [number]])
                     else:
@@ -62,7 +62,7 @@ def distinguish(s):
                             else:
                                 continue
                     sign1 = 0
-                elif sign2 > 0:
+                elif sign2 > -6:
                     if len(t1) == 0:
                         t1.append([float(a), li[i + 1], [number]])
                     else:
@@ -83,10 +83,11 @@ def distinguish(s):
             sign1 = 0
             sign2 = 0
             number = number + 1
-        elif "送" in li[i] or "收" in li[i] or"好处费" in li[i] or "赃款" in li[i]:
-            sign2 = 11
+        elif "送" in li[i] or "收" in li[i] or"好处费" in li[i] or "赃款" in li[i] or "虚报" in li[i] or "贿" in li[i] or "骗" in li[i] or "贪污" in li[i] or "侵吞" in li[i] or "挪用" in li[i]:
+            sign2 = 12
         elif "退"in li[i] or "返还" in li[i]:
-            sign1 = 11
+            if "退休" not in li[i]:
+                sign1 = 11
         elif "全部" in li[i]:
             if "赃款" in li[i+1]:
                 x = re.search(r'(^[1-9]([0-9]+)?(\.[0-9]{1,9})?$)|(^(0){1}$)|(^[0-9]\.[0-9]([0-9])?$)', li[i+2])
@@ -142,7 +143,12 @@ def distinguish(s):
         i = i + 1
     return_money = []
     for i in range(0, len(t2)):
-        return_money.append(str(t2[i][0]) + str(t2[i][1]))
+        if t2[i][0] == total[0]:
+            return_money = []
+            return_money.append(str(t2[i][0]) + str(t2[i][1]))
+            break
+        else:
+            return_money.append(str(t2[i][0]) + str(t2[i][1]))
     total_money = str(total[0])+' '+ total[1]
     sum = []
     sum.append([])
