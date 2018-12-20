@@ -159,7 +159,7 @@ def distinguish(s):
     sum[2] = total[2]
     i = 0
     if len(t3) == 0:
-        return (store),total_money, return_money
+        return store, 0, []
     while i < len(t3):
         if len(t3[i][2]) >= 4:
             t3.insert(i, t3[i])
@@ -219,7 +219,7 @@ def distinguish(s):
             if len(store[output[i + 2][j]]) == 0:
                 store[output[i + 2][j]].append([output[i], output[i + 1]])
         i = i + 3
-    return(store),total_money, return_money
+    return (store), total_money, return_money
 
 
 def find(output, total, t3):
@@ -403,16 +403,17 @@ def separate(s):
 
 
 
-def bribery_crime(text_string, lstm_server):
+def bribery_crime(text_string):
+
+    lstm_server = lstm.lstm_server() # initialize the lstm server       # <-----------------
     list_temp = []
-    text_string = re.sub('。、', '。', text_string)
-    text_string = re.sub(';', '。', text_string)
-    text = re.split('。', text_string)
+    store, total, back = distinguish(text_string)  # 获得金额， 获得总额， 获得退还
+    text = split_text(text_string)
     accused_names = lstm_server.get_regex_lstm_name(openlaw.get_accused_person(text_string),text_string)   # <--------------
     accused_position = {}
     cache = ''
-    store, total, back = distinguish(text_string) #获得金额， 获得总额， 获得退还
     bribery_position = {}
+
     if len(text) >= 1:
         for i in range(0, len(text)):
             if text[i] != '':  # 检查文段是否为空
@@ -421,68 +422,138 @@ def bribery_crime(text_string, lstm_server):
                 date = openlaw.get_date(text[i])  #获得日期
                 if len(date) > 0:  # 仅要有日期的句子
                     # 用正则抽取名字后，利用lstm进行优化名字抽取
-                    accused_name = lstm_server.get_regex_lstm_name(openlaw.get_accused_person(text[i]), text[i]) # accused_name是一个list <--------
-                    if accused_name == []: #如果这句话中没有受贿者，则使用所有的受贿者
-                        accused_name = accused_names
-                    reasons = openlaw.get_reasons(text[i])
-                    if reasons != []:
-                        reasons = reasons[0]
-                        if reasons.__len__() < 3:
-                            reasons = openlaw.get_reasons(cache)
-                    else:
-                        reasons = openlaw.get_reasons(cache)
+                    accused_name = method_name(accused_names, i, lstm_server, text)
 
-                    briber_temp = openlaw.get_briber(text[i], accused_names, lstm_server.get_name(text[i]))
-                    briber = lstm_server.get_regex_lstm_name(briber_temp, text[i]) # briber 是一个list  < ----------
-                    # ition = lstm_server.match_per_postion(briber, text[i])
+                    reasons = get_reasons(cache, i, text)
+
+                    briber = get_briber(accused_names, i, lstm_server, text)
+
                     if briber != []:  # 行贿者不为空
-                        briber_in_this_sentence = lstm_server.match_per_postion(briber, text[i]) # math briber and its position <----------------
-                        briber_person = {}
-                        for a in briber_in_this_sentence:
-                            if a in bribery_position and bribery_position[a] is '': # 字典中已有这个key，但是value为空
-                                bribery_position[a] = lstm_server.match_per_postion([a], text[i])[a]
-                            elif a not in bribery_position: # 字典中没有这个key
-                                bribery_position[a] = lstm_server.match_per_postion([a], text[i])[a]
-                            else:
-                                new_position = lstm_server.match_per_postion([a], text[i])[a]
-                                if new_position is not '':
-                                    bribery_position[a] = new_position
-                            briber_person[a] = bribery_position[a]
+                        briber_person, bribery_position = get_briber_position(briber, bribery_position, i, lstm_server, text)
                         money = ""
-                        if store[i] != []:
+                        if store[i]:
                             money = str(store[i][0][0]) + " " + str(store[i][0][1])
-                        accused_person = {}
-                        for a in accused_name:
-                            if a in accused_position and accused_position[a] is '': # 字典中已有这个key，但是value为空
-                                accused_position[a] = lstm_server.match_per_postion([a], text[i])[a]
-                            elif a not in accused_position: # 字典中没有这个key
-                                accused_position[a] = lstm_server.match_per_postion([a], text[i])[a]
-                            else:
-                                new_position = lstm_server.match_per_postion([a], text[i])[a]
-                                if new_position is not '':
-                                    accused_position[a] = new_position
-                            accused_person[a] = accused_position[a]
-                        list_temp.append([accused_person, briber_person, money, date[0], reasons])
+
+                        accused_person, accused_position = get_accused_person_position(accused_name, accused_position,
+                                                                                       i, lstm_server, text)
+                        industry = get_industry(i, reasons, accused_position, bribery_position)
+
+                        list_temp.append([accused_person, briber_person, money, date[0], reasons, industry])
+
             cache = text[i]
-        i = -1
-        for s in range(0, list_temp.__len__()):
-            ac_p = list_temp[s][0]
-            br_p = list_temp[s][1]
-            if i == -1 and list_temp[s][2] == total:
-                i = s
-            for p in ac_p:
-                if ac_p[p] == '':
-                    list_temp[s][0][p] = accused_position[p]
-            for p in br_p:
-                if br_p[p] == '':
-                    list_temp[s][1][p] = bribery_position[p]
-        if i != -1:  # 是总额的话比别人多一项
-            if list_temp.__len__() > i + 1:
-                list_temp = list_temp[0: i] + list_temp[i + 1:list_temp.__len__()]
-            else:
-                list_temp = list_temp[0: i]
+
+        list_temp = update(accused_position, bribery_position, list_temp, total)
 
         return list_temp,total,back #第一项为事实，第二项为总额，第三项为退还
+
+
+def update(accused_position, bribery_position, list_temp, total):
+    i = -1
+    for s in range(0, list_temp.__len__()):
+        ac_p = list_temp[s][0]
+        br_p = list_temp[s][1]
+        if i == -1 and list_temp[s][2] == total:
+            i = s
+        #
+        for p in ac_p:
+            if ac_p[p] == '':
+                list_temp[s][0][p] = accused_position[p]
+        for p in br_p:
+            if br_p[p] == '':
+                list_temp[s][1][p] = bribery_position[p]
+    if i != -1:  # 是总额的话比别人多一项
+        if list_temp.__len__() > i + 1:
+            list_temp = list_temp[0: i] + list_temp[i + 1:list_temp.__len__()]
+        else:
+            list_temp = list_temp[0: i]
+    return list_temp
+
+
+def get_accused_person_position(accused_name, accused_position, i, lstm_server, text):
+    accused_person = {}
+    for a in accused_name:
+        if a in accused_position and accused_position[a] is '':  # 字典中已有这个key，但是value为空
+            accused_position[a] = lstm_server.match_per_postion([a], text[i])[a]
+        elif a not in accused_position:  # 字典中没有这个key
+            accused_position[a] = lstm_server.match_per_postion([a], text[i])[a]
+        else:
+            new_position = lstm_server.match_per_postion([a], text[i])[a]
+            if new_position is not '':
+                accused_position[a] = new_position
+        accused_person[a] = accused_position[a]
+    return accused_person, accused_position
+
+
+def get_briber_position(briber, bribery_position, i, lstm_server, text):
+    briber_in_this_sentence = lstm_server.match_per_postion(briber,
+                                                            text[i])  # math briber and its position <----------------
+    briber_person = {}
+    for a in briber_in_this_sentence:
+        if a in bribery_position and bribery_position[a] is '':  # 字典中已有这个key，但是value为空
+            bribery_position[a] = lstm_server.match_per_postion([a], text[i])[a]
+        elif a not in bribery_position:  # 字典中没有这个key
+            bribery_position[a] = lstm_server.match_per_postion([a], text[i])[a]
+        else:
+            new_position = lstm_server.match_per_postion([a], text[i])[a]
+            if new_position is not '':
+                bribery_position[a] = new_position
+        briber_person[a] = bribery_position[a]
+    return briber_person, bribery_position
+
+
+def split_text(text_string):
+    text_string = re.sub('。、', '。', text_string)
+    text_string = re.sub(';', '。', text_string)
+    text = re.split('。', text_string)
+    return text
+
+
+def get_briber(accused_names, i, lstm_server, text):
+    briber_temp = openlaw.get_briber(text[i], accused_names, lstm_server.get_name(text[i]))
+    briber = lstm_server.get_regex_lstm_name(briber_temp, text[i])  # briber 是一个list  < ----------
+    return briber
+
+
+def get_industry(i, reasons, accused, bribery):
+    industry = []
+    accused = accused.values()
+    accused_text = ''
+    for s in accused:
+        accused_text = accused_text + ',' + s
+
+    bribery = bribery.values()
+    bribery_text = ''
+    for s in bribery:
+        bribery_text = bribery_text + 's' + s
+
+    reasons_text = ''
+    for s in reasons:
+        reasons_text = reasons_text + s
+
+    if reasons != []:
+        industry = openlaw.get_industry(reasons_text, industry)
+    industry = openlaw.get_industry(accused_text, industry)
+    industry = openlaw.get_industry(bribery_text, industry)
+    return industry
+
+
+def get_reasons(cache, i, text):
+    reasons = openlaw.get_reasons(text[i])
+    if reasons != []:
+        reasons = reasons[0]
+        if reasons.__len__() < 3:
+            reasons = openlaw.get_reasons(cache)
+    else:
+        reasons = openlaw.get_reasons(cache)
+    return reasons
+
+
+def method_name(accused_names, i, lstm_server, text):
+    accused_name = lstm_server.get_regex_lstm_name(openlaw.get_accused_person(text[i]),
+                                                   text[i])  # accused_name是一个list <--------
+    if accused_name == []:  # 如果这句话中没有受贿者，则使用所有的受贿者
+        accused_name = accused_names
+    return accused_name
 
 
 def get_info_list(c):
@@ -515,7 +586,6 @@ if __name__ == '__main__':
     temp_str7=''
     temp_str8=''
     tmep_str9=''
-    lstm_server = lstm.lstm_server() # initialize the lstm server       # <-----------------
-    content, total, back= bribery_crime(temp_str2, lstm_server)
+    content, total, back= bribery_crime(temp_str3)
     get_info_list(content)
 
