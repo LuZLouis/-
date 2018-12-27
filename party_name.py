@@ -26,68 +26,25 @@ def distinguish(s):
     store = []
     number = 0
     for i in range(0, len(li)):
-        x = re.search(r'(^[1-9]([0-9]+)?(\.[0-9]{1,9})?$)|(^(0){1}$)|(^[0-9]\.[0-9]([0-9])?$)', li[i])
         sign1 = sign1 - 1
         sign2 = sign2 - 1
-        if x:
-            if "元" == li[i+1] or li[i+1] == "万元":
-                a = x.group()
-                if len(t3) == 0:
-                    t3.append([float(a), li[i + 1], [number]])
-                else:
-                    for j in range(0, len(t3)):
-                        if t3[j][0] == float(a):
-                            if number not in t3[j][2]:
-                                t3[j][2].append(number)
-                                break
-                            else:
-                                break
-                        elif j == len(t3) - 1:
-                            t3.append([float(a), li[i + 1], [number]])
-                        else:
-                            continue
-                if sign1 > -6:
-                    if len(t2) == 0:
-                        t2.append([float(a), li[i + 1], [number]])
-                    else:
-                        for j in range(0, len(t2)):
-                            if t2[j][0] == float(a):
-                                if number not in t2[j][2]:
-                                    t2[j][2].append(number)
-                                    break
-                                else:
-                                    break
-                            elif j == len(t2) - 1:
-                                t2.append([float(a), li[i + 1], [number]])
-                            else:
-                                continue
-                    sign1 = 0
-                elif sign2 > -6:
-                    if len(t1) == 0:
-                        t1.append([float(a), li[i + 1], [number]])
-                    else:
-                        for j in range(0, len(t1)):
-                            if t1[j][0] == float(a):
-                                if number not in t1[j][2]:
-                                    t1[j][2].append(number)
-                                    break
-                                else:
-                                    break
-                            elif j == len(t1) - 1:
-                                t1.append([float(a), li[i + 1], [number]])
-                            else:
-                                continue
-                    sign2 = 0
-        elif "。" in li[i] or ";" in li[i]:
+        sign1, sign2 = judgement_number(i, li, number, sign1, sign2, t1, t2, t3)
+        if "。" in li[i] or ";" in li[i] or "；" in li[i]:
             store.append([])
             sign1 = 0
             sign2 = 0
             number = number + 1
         elif "送" in li[i] or "收" in li[i] or"好处费" in li[i] or "赃款" in li[i] or "虚报" in li[i] or "贿" in li[i] or "骗" in li[i] or "贪污" in li[i] or "侵吞" in li[i] or "挪用" in li[i]:
             sign2 = 12
+            if i - 5 >= 0:
+                for j in range(i - 5, i):
+                    sign1, sign2 = judgement_number(j, li, number, sign1, sign2, t1, t2, t3)
         elif "退"in li[i] or "返还" in li[i]:
             if "退休" not in li[i]:
                 sign1 = 11
+                if i - 5 >= 0:
+                    for j in range(i - 5, i):
+                        sign1, sign2 = judgement_number(j, li, number, sign1, sign2, t1, t2, t3)
         elif "全部" in li[i]:
             if "赃款" in li[i+1]:
                 x = re.search(r'(^[1-9]([0-9]+)?(\.[0-9]{1,9})?$)|(^(0){1}$)|(^[0-9]\.[0-9]([0-9])?$)', li[i+2])
@@ -104,43 +61,8 @@ def distinguish(s):
                 if not x:
                     t2.append(["总额", "总额单位", [number]])
     total = [float(0), "元", []]
-    for i in range(0, len(t1)):
-        if t1[i][1] == total[1]:
-            if t1[i][0] > total[0]:
-                total[0] = t1[i][0]
-                total[2] = t1[i][2]
-            elif t1[i][0] < total[0]:
-                continue
-        elif "万元" in t1[i][1]:
-            if total[0] >= t1[i][0] * 10000:
-                continue
-            else:
-                total[0] = t1[i][0]
-                total[1] = t1[i][1]
-                total[2] = t1[i][2]
-        elif "万元" in total[1]:
-            if total[0] * 10000 >= t1[i][0]:
-                continue
-            else:
-                total[0] = t1[i][0]
-                total[1] = t1[i][1]
-                total[2] = t1[i][2]
-    z = len(t2)
-    i = 0
-    while i < z:
-        if t2[i][0] == "总额":
-            j = 0
-            while j < z:
-                if t2[j][0] == total[0]:
-                    t2[j][2].append(t2[i][2])
-                    t2.pop(i)
-                    z = z - 1
-                    break
-                elif j == z - 1:
-                    t2[i][0] = total[0]
-                    t2[i][1] = total[1]
-                j = j + 1
-        i = i + 1
+    compare(t1, total)
+    getRefundAmount(t2, total)
     return_money = []
     for i in range(0, len(t2)):
         if t2[i][0] == total[0]:
@@ -149,17 +71,11 @@ def distinguish(s):
             break
         else:
             return_money.append(str(t2[i][0]) + str(t2[i][1]))
-    total_money = str(total[0])+' '+ total[1]
-    sum = []
-    sum.append([])
-    sum.append([])
-    sum.append([])
-    sum[0] = total[0]
-    sum[1] = total[1]
-    sum[2] = total[2]
-    i = 0
+    total_money = str(total[0]) + ' ' + total[1]
+    sum = [total[0], total[1], total[2]]
     if len(t3) == 0:
         return store, 0, []
+    i = 0
     while i < len(t3):
         if len(t3[i][2]) >= 4:
             t3.insert(i, t3[i])
@@ -170,32 +86,7 @@ def distinguish(s):
     output = []
     m = 1
     while m < len(t3):
-        for n in range(0, m):
-            if t3[m][0] == total[0] and t3[m][1] == total[1]:
-                t3.pop(m)
-                m = m - 1
-                break
-            if t3[m][1] == t3[n][1]:
-                if t3[m][0] > t3[n][0]:
-                    tem = t3[n]
-                    t3[n] = t3[m]
-                    t3.pop(m)
-                    t3.insert(n + 1, tem)
-                    break
-            elif "万元" in t3[m][1]:
-                if t3[n][0] < t3[m][0] * 10000:
-                    tem = t3[n]
-                    t3[n] = t3[m]
-                    t3.pop(m)
-                    t3.insert(n + 1, tem)
-                    break
-            elif "万元" in t3[n][1]:
-                if t3[m][0] > t3[n][0] * 10000:
-                    tem = t3[n]
-                    t3[n] = t3[m]
-                    t3.pop(m)
-                    t3.insert(n + 1, tem)
-                    break
+        m = compare2(m, t3, total)
         m = m + 1
     combination(output, total, t3)
     j = 0
@@ -204,7 +95,7 @@ def distinguish(s):
             t3.remove([output[j], output[j + 1], output[j + 2]])
         j = j + 3
     if len(output) != 0:
-        find(output, total, t3)
+       find(output, total, t3)
     i = 0
     if len(output) == 0:
         for j in range(0, len(t3)):
@@ -218,8 +109,122 @@ def distinguish(s):
         for j in range(0, len(output[i + 2])):
             if len(store[output[i + 2][j]]) == 0:
                 store[output[i + 2][j]].append([output[i], output[i + 1]])
+        print("%s %s %s" % (str(output[i]), output[i + 1], str(output[i + 2])))
         i = i + 3
-    return (store), total_money, return_money
+        return (store), total_money, return_money
+
+
+def judgement_number(i, li, number, sign1, sign2, t1, t2, t3):
+    x = re.search(r'(^[1-9]([0-9]+)?(\.[0-9]{1,9})?$)|(^(0){1}$)|(^[0-9]\.[0-9]([0-9])?$)', li[i])
+    if x:
+        if "元" in li[i + 1] and li[i + 1] != "余万元" and li[i + 1] != "万余元" and li[i + 1] != "多万元" and li[i + 1] != "万多元":
+            a = x.group()
+            if len(t3) == 0:
+                t3.append([float(a), li[i + 1], [number]])
+            else:
+                addNumber(a, i, li, number, t3)
+            if sign1 > 0:
+                if len(t2) == 0:
+                    t2.append([float(a), li[i + 1], [number]])
+                else:
+                    addNumber(a, i, li, number, t2)
+                sign1 = 0
+            elif sign2 > 0:
+                if len(t1) == 0:
+                    t1.append([float(a), li[i + 1], [number]])
+                else:
+                    addNumber(a, i, li, number, t1)
+                sign2 = 0
+    return sign1, sign2
+
+
+def getRefundAmount(t2, total):
+    z = len(t2)
+    i = 0
+    while i < z:
+        if t2[i][0] == "总额":
+            j = i + 1
+            while j < z:
+                if t2[j][0] == total[0] or t2[j][0] == "总额":
+                    for k in range(0, len(t2[j][2])):
+                        t2[i][2].append(t2[j][2][k])
+                    t2.pop(j)
+                    z = z - 1
+                    continue
+                j = j + 1
+            t2[i][0] = total[0]
+            t2[i][1] = total[1]
+            break
+        else:
+            i = i + 1
+
+
+def compare2(m, t, total):
+    for n in range(0, m):
+        if t[m][0] == total[0] and t[m][1] == total[1]:
+            t.pop(m)
+            m = m - 1
+            break
+        if t[m][1] == t[n][1]:
+            if t[m][0] > t[n][0]:
+                tem = t[n]
+                t[n] = t[m]
+                t.pop(m)
+                t.insert(n + 1, tem)
+                break
+        elif "万元" in t[m][1]:
+            if t[n][0] < t[m][0] * 10000:
+                tem = t[n]
+                t[n] = t[m]
+                t.pop(m)
+                t.insert(n + 1, tem)
+                break
+        elif "万元" in t[n][1]:
+            if t[m][0] > t[n][0] * 10000:
+                tem = t[n]
+                t[n] = t[m]
+                t.pop(m)
+                t.insert(n + 1, tem)
+                break
+    return m
+
+
+def compare(t, total):
+    for i in range(0, len(t)):
+        if t[i][1] == total[1]:
+            if t[i][0] > total[0]:
+                total[0] = t[i][0]
+                total[2] = t[i][2]
+            elif t[i][0] < total[0]:
+                continue
+        elif "万元" in t[i][1]:
+            if total[0] >= t[i][0] * 10000:
+                continue
+            else:
+                total[0] = t[i][0]
+                total[1] = t[i][1]
+                total[2] = t[i][2]
+        elif "万元" in total[1]:
+            if total[0] * 10000 >= t[i][0]:
+                continue
+            else:
+                total[0] = t[i][0]
+                total[1] = t[i][1]
+                total[2] = t[i][2]
+
+
+def addNumber(a, i, li, number, t):
+    for j in range(0, len(t)):
+        if t[j][0] == float(a):
+            if number not in t[j][2]:
+                t[j][2].append(number)
+                break
+            else:
+                break
+        elif j == len(t) - 1:
+            t.append([float(a), li[i + 1], [number]])
+        else:
+            continue
 
 
 def find(output, total, t3):
@@ -229,22 +234,7 @@ def find(output, total, t3):
         total[0] = output[i]
         total[1] = output[i + 1]
         temp = []
-        for j in range(0, len(t3)):
-            if total[1] == t3[j][1]:
-                if total[0] > t3[j][0]:
-                    for k in range(j, len(t3)):
-                        temp.append(t3[k])
-                    break
-            elif "万元" in total[1]:
-                if total[0] * 10000 > t3[j][0]:
-                    for k in range(j, len(t3)):
-                        temp.append(t3[k])
-                    break
-            elif "万元" in t3[j][1]:
-                if total[0] > t3[j][0] * 10000:
-                    for k in range(j, len(t3)):
-                        temp.append(t3[k])
-                    break
+        compare1(t3, temp, total)
         if combination(t, total, temp) == False:
             i = i + 3
             continue
@@ -261,6 +251,25 @@ def find(output, total, t3):
         i = i + 3
 
 
+def compare1(t, temp, total):
+    for j in range(0, len(t)):
+        if total[1] == t[j][1]:
+            if total[0] > t[j][0]:
+                for k in range(j, len(t)):
+                    temp.append(t[k])
+                break
+        elif "万元" in total[1]:
+            if total[0] * 10000 > t[j][0]:
+                for k in range(j, len(t)):
+                    temp.append(t[k])
+                break
+        elif "万元" in t[j][1]:
+            if total[0] > t[j][0] * 10000:
+                for k in range(j, len(t)):
+                    temp.append(t[k])
+                break
+
+
 def combination(output, total, t3):
     i = 0
     n = 0
@@ -273,23 +282,8 @@ def combination(output, total, t3):
         while j <= i:
             num.append(j)
             j = j + 1
-        k = 0
-        x = []
-        s = 0
-        for m in range(0, len(num)):
-            x.append(t3[num[m]][0])
-            x.append(t3[num[m]][1])
-            x.append(t3[num[m]][2])
-            x.append(m)
-        while k <= len(x) - 4:
-            if x[k + 1] != total[1]:
-                if x[k + 1] == "元":
-                    s = s + x[k] / 10000
-                else:
-                    s = s + x[k] * 10000
-            else:
-                s = s + x[k]
-            k = k + 4
+        x = getx(num, t3)
+        s = getTotal(total, x)
         if s == total[0]:
             result(output, x)
             break
@@ -302,23 +296,8 @@ def combination(output, total, t3):
             if num[0] < len(t3) - i - 1:
                 if num[len(num) - 1] < len(t3) - 1:
                     num[len(num) - 1] = num[len(num) - 1] + 1
-                    k = 0
-                    x = []
-                    s = 0
-                    for m in range(0, len(num)):
-                        x.append(t3[num[m]][0])
-                        x.append(t3[num[m]][1])
-                        x.append(t3[num[m]][2])
-                        x.append(m)
-                    while k <= len(x) - 4:
-                        if x[k + 1] != total[1]:
-                            if x[k + 1] == "元":
-                                s = s + x[k] / 10000
-                            else:
-                                s = s + x[k] * 10000
-                        else:
-                            s = s + x[k]
-                        k = k + 4
+                    x = getx(num, t3)
+                    s = getTotal(total, x)
                     if s == total[0]:
                         result(output, x)
                         break
@@ -329,50 +308,46 @@ def combination(output, total, t3):
                     num[len(num) - z - 1] = num[len(num) - z - 1] + 1
                     for m in range(len(num) - z, len(num)):
                         num[m] = num[m - 1] + 1
-                    k = 0
-                    x = []
-                    s = 0
-                    for m in range(0, len(num)):
-                        x.append(t3[num[m]][0])
-                        x.append(t3[num[m]][1])
-                        x.append(t3[num[m]][2])
-                        x.append(m)
-                    while k <= len(x) - 4:
-                        if x[k + 1] != total[1]:
-                            if x[k + 1] == "元":
-                                s = s + x[k] / 10000
-                            else:
-                                s = s + x[k] * 10000
-                        else:
-                            s = s + x[k]
-                        k = k + 4
+                    x = getx(num, t3)
+                    s = getTotal(total, x)
                     if s == total[0]:
                         result(output, x)
                         break
             elif num[0] == len(t3) - i - 1:
-                k = 0
-                x = []
-                s = 0
-                for m in range(0, len(num)):
-                    x.append(t3[num[m]][0])
-                    x.append(t3[num[m]][1])
-                    x.append(t3[num[m]][2])
-                    x.append(m)
-                while k <= len(x) - 4:
-                    if x[k + 1] != total[1]:
-                        if x[k + 1] == "元":
-                            s = s + x[k] / 10000
-                        else:
-                            s = s + x[k] * 10000
-                    else:
-                        s = s + x[k]
-                    k = k + 4
+                x = getx(num, t3)
+                s = getTotal(total, x)
                 if s == total[0]:
                     result(output, x)
+                    break
                 break
         i = i + 1
     if len(output) == 0:
         return False
+
+
+def getTotal(total, x):
+    s = 0
+    k = 0
+    while k <= len(x) - 4:
+        if x[k + 1] != total[1]:
+            if x[k + 1] == "元":
+                s = s + x[k] / 10000
+            else:
+                s = s + x[k] * 10000
+        else:
+            s = s + x[k]
+        k = k + 4
+    return s
+
+
+def getx(num, t3):
+    x = []
+    for m in range(0, len(num)):
+        x.append(t3[num[m]][0])
+        x.append(t3[num[m]][1])
+        x.append(t3[num[m]][2])
+        x.append(m)
+    return x
 
 
 def result(output, x):
