@@ -28,13 +28,12 @@ pos_name = "理事长|理事|总干事|总监|董事长|执行董事|总裁|总�
          "|副主任科员|助理巡视员|调研员|助理调研员|法定代表人|副经理|经理|副书记|书记|队长"\
          "|站长|负责人|副总经理|科长|业务员|行长|法定代表人|法人代表|理事长|审计|董事|总指挥|股东|老总|校长|企业法人|老板"\
          "|经营者|主任助理|保安|保洁主管|职工|销售员|接警员|秘书|法人|常务副主任|办公室主任|主管|教师|员工|教授|承包人" \
-         "|办员|工作人员" \
-
+         "|办员|工作人员|代理商"
 
 
 class lstm_server():
     def __init__(self):
-        self.model, self.saver,self.ckpt_file = self.get_model()
+        self.model, self.saver, self.ckpt_file = self.get_model()
         self.config = tf.ConfigProto()
         self.sess = tf.Session(config=self.config)
         self.saver.restore(self.sess, self.ckpt_file)
@@ -129,14 +128,14 @@ class lstm_server():
                     break
         return regex_name
 
-    def get_postion(self, text):
+    def get_position(self, text):
         org = self.get_org(text)
         organization = []
         # print("loc:{}".format(org))
         for pos_item in org:
             # print(pos_item)
-            first = '{}{}(?:{}){}、{}(?:{}){}|'.format(pos_item, '[的]{0,1}[总正副大中小原]{0,1}', pos_name,"(?:助理|助手|秘书){0,1}", '[总正副大中小原]{0,1}', pos_name, "(?:助理|助手|秘书){0,1}")
-            second = '{}{}(?:{}){}'.format(pos_item, '[的]{0,1}[总正副大中小原]{0,1}', pos_name, "(?:助理|助手|秘书){0,1}")
+            first = '{}{}(?:{}){}、{}(?:{}){}|'.format(pos_item, '[\u4e00-\u9fa5\d]{0,12}', pos_name, "(?:助理|助手|秘书){0,1}", '[总正副大中小原]{0,1}', pos_name, "(?:助理|助手|秘书){0,1}")
+            second = '{}{}(?:{}){}'.format(pos_item, '[\u4e00-\u9fa5\d]{0,10}', pos_name, "(?:助理|助手|秘书){0,1}")
             pattern = re.compile(first + second)
             content = pattern.findall(text)
             # print("pos_name{}".format(content))
@@ -153,42 +152,67 @@ class lstm_server():
             new_organization.append(organization[index])
         return new_organization
 
-    def match_per_postion(self, name_list,text):
-        pos_list = self.get_postion(text)
+    def match_per_position(self, name_list, text):
+        pos_list = self.get_position(text)
+        org = self.get_org(text)  # 2018/12/27 add to handle the format of pos + "工作人员"
         # print(text)
         # print(name_list)
         # print(pos_list)
-        name_pos_lists = {}
+        name_pos_lists = {}  # a dict to store the result, the format is dict({"name1":"pos"},{"name2":"pos"})
         for name_temp in name_list:
-            # print(name_temp)
-            name_pos_list = []
-            for pos_temp in pos_list:
-                pattern = re.compile("{}[\u4e00-\u9fa5]*(?:担任|任)[\u4e00-\u9fa5]*{}|"
-                                     "{}[\u4e00-\u9fa5]*(?:担任|任)[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*{}|"
-                                     "{}[\u4e00-\u9fa5]*(?:担任|任)[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*{}"
-                                     "".format(name_temp, pos_temp,name_temp, pos_temp,name_temp, pos_temp))
-                name_pos = pattern.findall(text)
-                if not name_pos:
-                    pattern = re.compile("{}{}{}".format(pos_temp, "[的]{0,1}", name_temp))
-                    name_pos = pattern.findall(text)
-                if not name_pos:
-                    pattern = re.compile("(?:{}){}{}".format(pos_name, "[的]{0,1}", name_temp))
-                    name_pos = pattern.findall(text)
-                if name_pos:
-                    # 去除包含关系， 如'广州市方欣科技有限公司总裁助理' 包含'总裁助理'
-                    add_mark = True
-                    for item in name_pos_list:
-                        if pos_temp in item[1]:
-                            add_mark = False
-                            break
-                    if add_mark:
-                        name_pos_list.append((name_temp, pos_temp))
+            # warn: name_pos_lists and name_pos_list are different
+            name_pos_list = self.match_per_position_regex1(name_temp, pos_list, text)
 
+            # if former method can't get any, we would try to get straightly by pos + '工作人员'
+            if not name_pos_list:
+                name_pos_list = self.match_per_position_regex2(name_temp, org,  text)
+
+            # transform list to dict for each person
             for item in name_pos_list:
                 name_pos_lists[name_temp] = item[1]
             if not name_pos_list:
                 name_pos_lists[name_temp] = ''
-        return name_pos_lists  # 返回格式[(name, pos),(name, pos)]
+        return name_pos_lists  # 返回格式dict({name:pos},{name2:pos})
+
+    @staticmethod
+    def match_per_position_regex1(name_temp, pos_list, text):
+        name_pos_list = []
+        for pos_temp in pos_list:
+            pattern = re.compile("{}[\u4e00-\u9fa5\d]*(?:担任|任)[\u4e00-\u9fa5]*{}|"
+                                 "{}[\u4e00-\u9fa5\d]*(?:担任|任)[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*{}|"
+                                 "{}[\u4e00-\u9fa5\d]*(?:担任|任)[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*、[\u4e00-\u9fa5]*{}"
+                                 "".format(name_temp, pos_temp, name_temp, pos_temp, name_temp, pos_temp))
+            name_pos = pattern.findall(text)
+            if not name_pos:
+                pattern = re.compile("{}{}{}".format(pos_temp, "[\u4e00-\u9fa5\d]{0,3}", name_temp))
+                name_pos = pattern.findall(text)
+            if name_pos:
+                # 去除包含关系， 如'广州市方欣科技有限公司总裁助理' 包含'总裁助理'
+                add_mark = True
+                for item in name_pos_list:
+                    if pos_temp in item[1]:
+                        add_mark = False
+                        break
+                if add_mark:
+                    name_pos_list.append((name_temp, pos_temp))
+        return name_pos_list
+
+    @staticmethod
+    def match_per_position_regex2(name_temp, org, text):
+        name_pos_list = []
+        for pos_temp in org:
+            pattern = re.compile("{}[\u4e00-\u9fa5\d]*在[\u4e00-\u9fa5\d]*{}([\u4e00-\u9fa5\d]*)工作".format(name_temp, pos_temp))
+            name_pos = pattern.findall(text)
+            if name_pos:
+                # 去除包含关系， 如'广州市方欣科技有限公司总裁助理' 包含'总裁助理'
+                add_mark = True
+                for item in name_pos_list:
+                    if pos_temp in item[1]:
+                        add_mark = False
+                        break
+                if add_mark:
+                    name_pos_list.append((name_temp, pos_temp))
+        return name_pos_list
 
 
 if __name__ == '__main__':
